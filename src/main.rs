@@ -2,21 +2,10 @@
 //!
 //! Uses cargo's own config resolution by running `cargo check` with
 //! RUSTC_WRAPPER set to itself. A recursive invocation is detected via
-//! `__CARGO_RUSTFLAGS_RECURSIVE` and handles three cases:
-//!
-//! - `-vV` queries: forwarded to real rustc as-is
-//! - `--print=*` probes: forwarded with resolved flags stripped (some flags
-//!   like `-Clink-self-contained=+linker` error without `-Zunstable-options`)
-//! - Compilation: args are printed to stderr with a marker prefix and the
-//!   process exits, aborting the build so we can extract the flags.
-//!
-//! Usage:
-//!   cargo rustflags --target x86_64-unknown-linux-gnu
-//!   cargo rustflags --config 'target.x86_64-unknown-linux-gnu.rustflags=["-Clink-arg=-fuse-ld=lld"]'
+//! `__CARGO_RUSTFLAGS_RECURSIVE`.
 
 use std::{
     env, fs,
-    path::PathBuf,
     process::{self, Command, Stdio},
 };
 
@@ -38,7 +27,6 @@ fn main() {
 
     let mut target: Option<&str> = None;
     let mut configs: Vec<&str> = Vec::new();
-    let mut manifest_path: Option<&str> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -50,13 +38,9 @@ fn main() {
                 i += 1;
                 configs.push(args.get(i).expect("--config requires a value"));
             }
-            "--manifest-path" => {
-                i += 1;
-                manifest_path = Some(args.get(i).expect("--manifest-path requires a value"));
-            }
             "-h" | "--help" => {
                 eprintln!(
-                    "Usage: cargo rustflags [--target TRIPLE] [--config KEY=VALUE|PATH]... [--manifest-path PATH]"
+                    "Usage: cargo rustflags [--target TRIPLE] [--config KEY=VALUE|PATH]..."
                 );
                 eprintln!();
                 eprintln!("Resolve the effective RUSTFLAGS that cargo would pass to rustc.");
@@ -65,7 +49,6 @@ fn main() {
                 eprintln!("  --target TRIPLE            Target triple (e.g. x86_64-unknown-linux-gnu)");
                 eprintln!("  --config KEY=VALUE|PATH    Extra cargo config overrides or path to a");
                 eprintln!("                             TOML config file (repeatable)");
-                eprintln!("  --manifest-path PATH       Path to Cargo.toml (for config resolution context)");
                 process::exit(0);
             }
             other => {
@@ -76,9 +59,7 @@ fn main() {
         i += 1;
     }
 
-    let configs: Vec<String> = configs.iter().map(|c| resolve_config(c)).collect();
-    let config_refs: Vec<&str> = configs.iter().map(|s| s.as_str()).collect();
-    match resolve(target, &config_refs, manifest_path) {
+    match resolve(target, &configs) {
         Ok(flags) => {
             if !flags.is_empty() {
                 println!("{flags}");
@@ -147,22 +128,9 @@ fn wrapper_mode() -> ! {
     process::exit(1);
 }
 
-fn resolve(
-    target: Option<&str>,
-    configs: &[&str],
-    manifest_path: Option<&str>,
-) -> Result<String, String> {
+fn resolve(target: Option<&str>, configs: &[&str]) -> Result<String, String> {
     let tmp = env::temp_dir().join("cargo-rustflags");
     fs::create_dir_all(&tmp).map_err(|e| format!("create tmpdir: {e}"))?;
-
-    // Determine working directory for cargo (controls .cargo/config.toml resolution).
-    let work_dir = match manifest_path {
-        Some(p) => PathBuf::from(p)
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .to_path_buf(),
-        None => env::current_dir().map_err(|e| format!("cwd: {e}"))?,
-    };
 
     // Minimal dummy crate for cargo to "compile".
     let dummy = tmp.join("dummy");
@@ -183,7 +151,6 @@ fn resolve(
         .arg(dummy.join("Cargo.toml"))
         .env("RUSTC_WRAPPER", &self_exe)
         .env(RECURSIVE_ENV, "1")
-        .current_dir(&work_dir)
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
 
@@ -214,30 +181,4 @@ fn resolve(
     let flags = all[split..].join(" ");
     let _ = fs::remove_dir_all(&tmp);
     Ok(flags)
-}
-
-/// Cargo treats `--config` values containing a path separator or ending in
-/// `.toml` as file paths. When we detect a path, resolve it to an absolute
-/// path so it works regardless of the working directory we pass to cargo.
-fn resolve_config(value: &str) -> String {
-    let is_path = value.ends_with(".toml") || value.contains('/') || value.contains('\\');
-    if is_path {
-        // Attempt to canonicalize; fall back to making it absolute via CWD.
-        let p = PathBuf::from(value);
-        match p.canonicalize() {
-            Ok(abs) => abs.to_string_lossy().into_owned(),
-            Err(_) => {
-                if p.is_absolute() {
-                    value.to_string()
-                } else {
-                    match env::current_dir() {
-                        Ok(cwd) => cwd.join(p).to_string_lossy().into_owned(),
-                        Err(_) => value.to_string(),
-                    }
-                }
-            }
-        }
-    } else {
-        value.to_string()
-    }
 }
