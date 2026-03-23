@@ -1,0 +1,9 @@
+[target.'cfg(true)']
+rustflags = [
+  "--cfg=something"
+]
+
+[target.'cfg(vendor=pc)']
+rustflags = [
+  "--cfg=on_a_pc"
+]

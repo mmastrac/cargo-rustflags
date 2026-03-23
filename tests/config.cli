@@ -1,0 +1,30 @@
+#!/usr/bin/env clitest --v0
+
+# Test: simple.toml has no rustflags, expect empty output
+$ cargo-rustflags --config ${INITIAL_PWD}/simple.toml
+
+# Test: target.toml has cfg(true) rustflags
+$ cargo-rustflags --config ${INITIAL_PWD}/target.toml
+! --cfg=something
+
+# Test: include.toml includes other.toml
+$ cargo-rustflags --config ${INITIAL_PWD}/include.toml
+
+# Test: inline KEY=VALUE config still works
+$ cargo-rustflags --config "target.'cfg(true)'.rustflags=[\"--cfg=inline_test\"]"
+! --cfg=inline_test
+
+# Test: multiple --config flags combine
+$ cargo-rustflags --config ${INITIAL_PWD}/target.toml --config "target.'cfg(true)'.rustflags=[\"--cfg=extra\"]"
+! --cfg=something --cfg=extra
+
+# Test: unknown argument fails
+$ cargo-rustflags --bogus
+%EXIT 1
+? %{GREEDYDATA}Unknown argument: --bogus
+
+# Test: help flag
+$ cargo-rustflags --help
+%EXIT 0
+? %{GREEDYDATA}KEY=VALUE|PATH%{GREEDYDATA}
+*

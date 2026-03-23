@@ -1,0 +1,14 @@
+[package]
+name = "cargo-rustflags"
+version = "0.1.0"
+edition = "2021"
+description = "Resolve effective RUSTFLAGS for a cargo target"
+license = "MIT"
+author = "Matt Mastracci <matthew@mastracci.com>"
+readme = "README.md"
+
+[[bin]]
+name = "cargo-rustflags"
+path = "src/main.rs"
+
+[dependencies]
