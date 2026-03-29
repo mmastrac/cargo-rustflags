@@ -1,1 +1,1 @@
-include = "other.toml"
+include = ["other.toml"]

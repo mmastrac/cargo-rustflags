@@ -1,4 +1,4 @@
-[target.cfg(true)]
+[target.'cfg(true)']
 rustflags = [
   "--cfg=included"
 ]

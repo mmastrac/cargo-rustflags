@@ -9,6 +9,7 @@ $ cargo-rustflags --config ${INITIAL_PWD}/target.toml
 
 # Test: include.toml includes other.toml
 $ cargo-rustflags --config ${INITIAL_PWD}/include.toml
+! --cfg=included
 
 # Test: inline KEY=VALUE config still works
 $ cargo-rustflags --config "target.'cfg(true)'.rustflags=[\"--cfg=inline_test\"]"
@@ -17,6 +18,18 @@ $ cargo-rustflags --config "target.'cfg(true)'.rustflags=[\"--cfg=inline_test\"]
 # Test: multiple --config flags combine
 $ cargo-rustflags --config ${INITIAL_PWD}/target.toml --config "target.'cfg(true)'.rustflags=[\"--cfg=extra\"]"
 ! --cfg=something --cfg=extra
+
+# Test: --list prints one flag per line
+$ cargo-rustflags --config ${INITIAL_PWD}/target.toml --config "target.'cfg(true)'.rustflags=[\"--cfg=extra\"]" --list
+! --cfg=something
+! --cfg=extra
+
+# Test: -1 is shorthand for --list
+$ cargo-rustflags --config ${INITIAL_PWD}/target.toml -1
+! --cfg=something
+
+# Test: --list with no flags produces no output
+$ cargo-rustflags --config ${INITIAL_PWD}/simple.toml --list
 
 # Test: unknown argument fails
 $ cargo-rustflags --bogus

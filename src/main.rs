@@ -10,6 +10,7 @@ use std::{
 };
 
 const MARKER: &str = "CRFLAGS:";
+const MARKER_END: &str = "CRFLAGS_END";
 const RECURSIVE_ENV: &str = "__CARGO_RUSTFLAGS_RECURSIVE";
 
 fn main() {
@@ -27,6 +28,7 @@ fn main() {
 
     let mut target: Option<&str> = None;
     let mut configs: Vec<&str> = Vec::new();
+    let mut list = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -38,9 +40,12 @@ fn main() {
                 i += 1;
                 configs.push(args.get(i).expect("--config requires a value"));
             }
+            "-1" | "--list" => {
+                list = true;
+            }
             "-h" | "--help" => {
                 eprintln!(
-                    "Usage: cargo rustflags [--target TRIPLE] [--config KEY=VALUE|PATH]..."
+                    "Usage: cargo rustflags [OPTIONS] [--config KEY=VALUE|PATH]..."
                 );
                 eprintln!();
                 eprintln!("Resolve the effective RUSTFLAGS that cargo would pass to rustc.");
@@ -49,6 +54,7 @@ fn main() {
                 eprintln!("  --target TRIPLE            Target triple (e.g. x86_64-unknown-linux-gnu)");
                 eprintln!("  --config KEY=VALUE|PATH    Extra cargo config overrides or path to a");
                 eprintln!("                             TOML config file (repeatable)");
+                eprintln!("  -1, --list                 Print one flag per line");
                 process::exit(0);
             }
             other => {
@@ -62,7 +68,13 @@ fn main() {
     match resolve(target, &configs) {
         Ok(flags) => {
             if !flags.is_empty() {
-                println!("{flags}");
+                if list {
+                    for flag in &flags {
+                        println!("{flag}");
+                    }
+                } else {
+                    println!("{}", flags.join(" "));
+                }
             }
         }
         Err(e) => {
@@ -118,17 +130,16 @@ fn wrapper_mode() -> ! {
         process::exit(status.code().unwrap_or(1));
     }
 
-    // Compilation: emit all args with marker prefix and abort.
-    let joined: String = rustc_args
-        .iter()
-        .map(|s| s.as_str())
-        .collect::<Vec<_>>()
-        .join(" ");
-    eprintln!("{MARKER}{joined}");
+    // Compilation: emit args between sentinels, one per line, to preserve boundaries.
+    eprintln!("{MARKER}");
+    for arg in rustc_args {
+        eprintln!("{arg}");
+    }
+    eprintln!("{MARKER_END}");
     process::exit(1);
 }
 
-fn resolve(target: Option<&str>, configs: &[&str]) -> Result<String, String> {
+fn resolve(target: Option<&str>, configs: &[&str]) -> Result<Vec<String>, String> {
     let tmp = env::temp_dir().join("cargo-rustflags");
     fs::create_dir_all(&tmp).map_err(|e| format!("create tmpdir: {e}"))?;
 
@@ -164,21 +175,34 @@ fn resolve(target: Option<&str>, configs: &[&str]) -> Result<String, String> {
     let out = cmd.output().map_err(|e| format!("run cargo: {e}"))?;
     let stderr = String::from_utf8_lossy(&out.stderr);
 
-    let args_line = stderr
-        .lines()
-        .find_map(|l| l.strip_prefix(MARKER))
-        .ok_or_else(|| format!("failed to capture rustc args.\nstderr:\n{stderr}"))?;
+    // Collect args emitted between MARKER and MARKER_END sentinels, one per line.
+    let mut in_marker = false;
+    let mut all: Vec<&str> = Vec::new();
+    for line in stderr.lines() {
+        if line == MARKER {
+            in_marker = true;
+            continue;
+        }
+        if line == MARKER_END {
+            break;
+        }
+        if in_marker {
+            all.push(line);
+        }
+    }
+    if all.is_empty() {
+        return Err(format!("failed to capture rustc args.\nstderr:\n{stderr}"));
+    }
 
     // Cargo appends resolved rustflags after its own args. The last cargo-generated
     // arg is `dependency=<path>` (from `-L dependency=...`). Everything after is rustflags.
-    let all: Vec<&str> = args_line.split_whitespace().collect();
     let split = all
         .iter()
         .rposition(|a| a.starts_with("dependency="))
         .map(|i| i + 1)
         .unwrap_or(0);
 
-    let flags = all[split..].join(" ");
+    let flags: Vec<String> = all[split..].iter().map(|s| s.to_string()).collect();
     let _ = fs::remove_dir_all(&tmp);
     Ok(flags)
 }
