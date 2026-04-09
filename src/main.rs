@@ -123,8 +123,8 @@ fn wrapper_mode() -> ! {
                 skip_next = true;
                 continue;
             }
-            // Strip stdin marker and empty args that cargo passes in probes
-            if a == "-" || a.is_empty() {
+            // Strip empty args that cargo may pass in cross-compilation probes
+            if a.is_empty() {
                 continue;
             }
             filtered.push(a.as_str());
