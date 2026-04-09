@@ -105,7 +105,9 @@ fn wrapper_mode() -> ! {
 
     // --print=* probes: forward but strip resolved flags (-C/-Z/--cfg) that
     // cargo appends. They're irrelevant for probes and some error without
-    // -Zunstable-options.
+    // -Zunstable-options. Also strip `-` (stdin marker) and empty args that
+    // cargo may pass in cross-compilation probes — rustc rejects multiple
+    // input filenames.
     if has_print {
         let mut filtered = Vec::new();
         let mut skip_next = false;
@@ -119,6 +121,10 @@ fn wrapper_mode() -> ! {
             }
             if a == "--cfg" {
                 skip_next = true;
+                continue;
+            }
+            // Strip stdin marker and empty args that cargo passes in probes
+            if a == "-" || a.is_empty() {
                 continue;
             }
             filtered.push(a.as_str());
