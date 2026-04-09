@@ -31,6 +31,36 @@ $ cargo-rustflags --config ${INITIAL_PWD}/target.toml -1
 # Test: --list with no flags produces no output
 $ cargo-rustflags --config ${INITIAL_PWD}/simple.toml --list
 
+# Test: -C flags are captured
+$ cargo-rustflags --config "target.'cfg(true)'.rustflags=[\"-Cembed-bitcode=no\"]"
+! -Cembed-bitcode=no
+
+# Test: -Z flags on stable are captured (probe must not break)
+$ cargo-rustflags --config "target.'cfg(true)'.rustflags=[\"-Zparse-only\"]"
+! -Zparse-only
+
+# Test: -W flags are captured
+$ cargo-rustflags --config "target.'cfg(true)'.rustflags=[\"-Wunused\"]"
+! -Wunused
+
+# Test: mixed flag types
+$ cargo-rustflags --config "target.'cfg(true)'.rustflags=[\"--cfg=mytest\", \"-Copt-level=2\", \"-Wunused\"]" --list
+! --cfg=mytest
+! -Copt-level=2
+! -Wunused
+
+# Test: RUSTFLAGS env var
+$ RUSTFLAGS="--cfg=from_env" cargo-rustflags
+! --cfg=from_env
+
+# Test: --target resolves cross-compilation rustflags
+$ cargo-rustflags --target x86_64-apple-darwin --config "target.'cfg(true)'.rustflags=[\"--cfg=cross_test\"]"
+! --cfg=cross_test
+
+# Test: --target with mixed flags
+$ cargo-rustflags --target x86_64-pc-windows-msvc --config "target.'cfg(true)'.rustflags=[\"--cfg=mytest\", \"-Copt-level=2\"]"
+! --cfg=mytest -Copt-level=2
+
 # Test: unknown argument fails
 $ cargo-rustflags --bogus
 %EXIT 1
@@ -41,3 +71,4 @@ $ cargo-rustflags --help
 %EXIT 0
 ? %{GREEDYDATA}KEY=VALUE|PATH%{GREEDYDATA}
 *
+

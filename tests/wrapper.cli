@@ -1,0 +1,20 @@
+#!/usr/bin/env clitest --v0
+
+# These tests exercise the RUSTC_WRAPPER mode directly by setting the
+# recursive-invocation env var and calling the binary as cargo would.
+
+set __CARGO_RUSTFLAGS_RECURSIVE 1;
+
+# Test: wrapper forwards -vV probe unchanged
+$ cargo-rustflags "$(which rustc)" -vV
+! rustc %{GREEDYDATA}
+*
+! host: %{GREEDYDATA}
+*
+
+# Test: wrapper forwards --print probe, dropping user flags
+$ cargo-rustflags "$(which rustc)" - --crate-name ___ --print=file-names --crate-type bin --crate-type rlib --print=cfg -Copt-level=2 --cfg=mytest -Zunstable-options -Wwarnings
+*
+! target_os=%{GREEDYDATA}
+*
+

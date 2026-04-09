@@ -103,33 +103,36 @@ fn wrapper_mode() -> ! {
         process::exit(status.code().unwrap_or(1));
     }
 
-    // --print=* probes: forward but strip resolved flags (-C/-Z/--cfg) that
-    // cargo appends. They're irrelevant for probes and some error without
-    // -Zunstable-options. Also strip `-` (stdin marker) and empty args that
-    // cargo may pass in cross-compilation probes — rustc rejects multiple
-    // input filenames.
+    // --print=* probes: cargo sends these to learn about the target (file
+    // names, sysroot, cfg, etc.). The results don't depend on user-supplied
+    // rustflags, so we forward only the structural args cargo needs answers
+    // to — this avoids breakage from flags that are invalid for the current
+    // toolchain (e.g. -Z on stable).
     if has_print {
-        let mut filtered = Vec::new();
+        let mut probe_args: Vec<&str> = Vec::new();
         let mut skip_next = false;
         for a in rustc_args {
             if skip_next {
                 skip_next = false;
+                probe_args.push(a);
                 continue;
             }
-            if a.starts_with("-C") || a.starts_with("-Z") || a.starts_with("--cfg=") {
+            // Self-contained flags: pass through as-is.
+            if a == "-" || a.starts_with("--print=")
+                || a.starts_with("--crate-type=") || a.starts_with("--crate-name=")
+            {
+                probe_args.push(a);
                 continue;
             }
-            if a == "--cfg" {
+            // Flags with a separate value: pass through both this arg and the next.
+            if a == "--target" || a == "--crate-type" || a == "--crate-name" {
+                probe_args.push(a);
                 skip_next = true;
                 continue;
             }
-            // Strip empty args that cargo may pass in cross-compilation probes
-            if a.is_empty() {
-                continue;
-            }
-            filtered.push(a.as_str());
+            // Everything else (user rustflags): drop.
         }
-        let status = Command::new(rustc).args(&filtered).status().unwrap_or_else(|e| {
+        let status = Command::new(rustc).args(&probe_args).status().unwrap_or_else(|e| {
             eprintln!("failed to exec rustc: {e}");
             process::exit(1);
         });
