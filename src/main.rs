@@ -29,6 +29,7 @@ fn main() {
     let mut target: Option<&str> = None;
     let mut configs: Vec<&str> = Vec::new();
     let mut list = false;
+    let mut encoded = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -43,6 +44,9 @@ fn main() {
             "-1" | "--list" => {
                 list = true;
             }
+            "--encoded" => {
+                encoded = true;
+            }
             "-h" | "--help" => {
                 eprintln!(
                     "Usage: cargo rustflags [OPTIONS] [--config KEY=VALUE|PATH]..."
@@ -55,6 +59,7 @@ fn main() {
                 eprintln!("  --config KEY=VALUE|PATH    Extra cargo config overrides or path to a");
                 eprintln!("                             TOML config file (repeatable)");
                 eprintln!("  -1, --list                 Print one flag per line");
+                eprintln!("  --encoded                  Print as CARGO_ENCODED_RUSTFLAGS (\\x1f-separated)");
                 process::exit(0);
             }
             other => {
@@ -65,6 +70,11 @@ fn main() {
         i += 1;
     }
 
+    if list && encoded {
+        eprintln!("error: --list and --encoded are mutually exclusive");
+        process::exit(1);
+    }
+
     match resolve(target, &configs) {
         Ok(flags) => {
             if !flags.is_empty() {
@@ -72,6 +82,8 @@ fn main() {
                     for flag in &flags {
                         println!("{flag}");
                     }
+                } else if encoded {
+                    println!("{}", flags.join("\x1f"));
                 } else {
                     println!("{}", flags.join(" "));
                 }

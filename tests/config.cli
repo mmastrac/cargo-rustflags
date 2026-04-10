@@ -61,6 +61,22 @@ $ cargo-rustflags --target x86_64-apple-darwin --config "target.'cfg(true)'.rust
 $ cargo-rustflags --target x86_64-pc-windows-msvc --config "target.'cfg(true)'.rustflags=[\"--cfg=mytest\", \"-Copt-level=2\"]"
 ! --cfg=mytest -Copt-level=2
 
+# Test: --encoded produces 0x1f-separated output
+$ cargo-rustflags --config "target.'cfg(true)'.rustflags=[\"--cfg=mytest\", \"-Copt-level=2\"]" --encoded
+? --cfg=mytest\x1f-Copt-level=2
+
+# Test: --encoded with single flag (no separator)
+$ cargo-rustflags --config ${INITIAL_PWD}/target.toml --encoded
+! --cfg=something
+
+# Test: --encoded with no flags produces no output
+$ cargo-rustflags --config ${INITIAL_PWD}/simple.toml --encoded
+
+# Test: --list and --encoded are mutually exclusive
+$ cargo-rustflags --list --encoded
+%EXIT 1
+? %{GREEDYDATA}mutually exclusive
+
 # Test: unknown argument fails
 $ cargo-rustflags --bogus
 %EXIT 1
