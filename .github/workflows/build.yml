@@ -1,0 +1,30 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-clitest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build project
+        run: cargo build --locked
+
+      - name: Expose built binary on PATH
+        run: echo "${GITHUB_WORKSPACE}/target/debug" >> "$GITHUB_PATH"
+
+      - name: Install cargo-binstall
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-binstall
+
+      - name: Install clitest
+        run: cargo binstall clitest --no-confirm
+
+      - name: Run clitest suites
+        run: clitest tests/*.cli
