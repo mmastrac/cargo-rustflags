@@ -9,7 +9,12 @@ with RUSTC_WRAPPER set to itself.
 
 ## Usage: 
 
-`cargo rustflags [--target ...] [--config ...]`
+`cargo rustflags [--target ...] [--config ...] [--list] [--encoded]`
+
+- `--target`: Select a specific target (default: current target).
+- `--config`: Load a config file (default: none).
+- `--list`: Print RUSTFLAGS one-per-line.
+- `--encoded`: Print the encoded RUSTFLAGS (ie: CARGO_ENCODED_RUSTFLAGS).
 
 ## Examples:
 
@@ -25,7 +30,7 @@ $ cargo rustflags --target x86_64-unknown-linux-gnu
 # Print the effective RUSTFLAGS for the target, using a config file
 $ cargo rustflags --config .cargo/other.toml \
     --config 'target.x86_64-unknown-linux-gnu.rustflags=["-Clink-arg=-fuse-ld=lld"]'
--Clink-arg=-fuse-ld=lld -W unused
+-Clink-arg=-fuse-ld=lld -Wunused
 
 # Print RUSTFLAGS one-per-line
 $ cargo rustflags --list
