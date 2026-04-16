@@ -53,10 +53,14 @@ jobs:
       - run: |
           set -euxo pipefail
           cargo set-version "${{ steps.v.outputs.version }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "Matt Mastracci"
+          git config user.email "matthew@mastracci.com"
           git add -A
-          git commit -m "release v${{ steps.v.outputs.version }}"
+          git commit --allow-empty -m "release v${{ steps.v.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/v${{ steps.v.outputs.version }}" >/dev/null; then
+            echo "Tag v${{ steps.v.outputs.version }} already exists"
+            exit 1
+          fi
           git tag "v${{ steps.v.outputs.version }}"
           # Push only the tag (do not update default branch).
           git push origin "v${{ steps.v.outputs.version }}"
