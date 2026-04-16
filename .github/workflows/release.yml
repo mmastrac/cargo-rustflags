@@ -64,6 +64,14 @@ jobs:
           git tag "v${{ steps.v.outputs.version }}"
           # Push only the tag (do not update default branch).
           git push origin "v${{ steps.v.outputs.version }}"
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "v${{ steps.v.outputs.version }}" \
+            --title "v${{ steps.v.outputs.version }}" \
+            --notes ""
 
   build:
     needs: tag

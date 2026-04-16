@@ -4,7 +4,7 @@ version = "0.3.1"
 edition = "2021"
 description = "Resolve effective RUSTFLAGS for a cargo target"
 license = "MIT"
-author = "Matt Mastracci <matthew@mastracci.com>"
+authors = ["Matt Mastracci <matthew@mastracci.com>"]
 readme = "README.md"
 repository = "https://github.com/mmastrac/cargo-rustflags"
 
@@ -12,7 +12,7 @@ repository = "https://github.com/mmastrac/cargo-rustflags"
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ archive-suffix }"
 pkg-fmt = "tgz"
 
-[target.x86_64-pc-windows-msvc.package.metadata.binstall]
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"
 
 [[bin]]
