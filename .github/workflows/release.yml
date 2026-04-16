@@ -1,0 +1,127 @@
+# Manual release: bump version, tag, attach cross-platform binaries, optionally
+# publish to crates.io.
+#
+# Publishing: configure GitHub Environment `release` and crates.io trusted
+# publishing, then run with `publish_crates_io` enabled.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Crate version to release (defaults to Cargo.toml version), without a leading v"
+        required: false
+        type: string
+      publish_crates_io:
+        description: "After binaries are uploaded, run crates.io publish (trusted publishing / env approval)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-edit
+      - name: Resolve version
+        id: v
+        run: |
+          set -euo pipefail
+          V="${{ inputs.version }}"
+          if [ -z "$V" ]; then
+            V="$(
+              cargo metadata --no-deps --format-version 1 | jq -r '
+                (.resolve.root // .workspace_members[0]) as $root
+                | .packages[]
+                | select(.id == $root)
+                | .version
+              '
+            )"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - run: |
+          set -euxo pipefail
+          cargo set-version "${{ steps.v.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "release v${{ steps.v.outputs.version }}"
+          git tag "v${{ steps.v.outputs.version }}"
+          # Push only the tag (do not update default branch).
+          git push origin "v${{ steps.v.outputs.version }}"
+
+  build:
+    needs: tag
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            build-tool: cross
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            build-tool: cross
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            build-tool: cargo
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            build-tool: cargo
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            build-tool: cargo
+            rustflags: "-C target-feature=+crt-static"
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.tag.outputs.version }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: cargo-rustflags
+          target: ${{ matrix.target }}
+          build-tool: ${{ matrix.build-tool }}
+          archive: $bin-$target
+          ref: refs/tags/v${{ needs.tag.outputs.version }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          locked: true
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags || '' }}
+
+  publish:
+    needs: [tag, build]
+    if: ${{ inputs.publish_crates_io }}
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.tag.outputs.version }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      # Placeholder: extend with `--dry-run`, `--no-verify`, or `-p` as needed for your workspace layout.
+      - run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
