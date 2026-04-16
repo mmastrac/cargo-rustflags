@@ -8,12 +8,17 @@ jobs:
   build-and-clitest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build project
         run: cargo build --locked
+
+      - name: Check project
+        run: cargo check --locked
 
       - name: Expose built binary on PATH
         run: echo "${GITHUB_WORKSPACE}/target/debug" >> "$GITHUB_PATH"

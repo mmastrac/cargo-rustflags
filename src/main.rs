@@ -1,8 +1,4 @@
-//! cargo-rustflags: resolve effective RUSTFLAGS for a cargo target.
-//!
-//! Uses cargo's own config resolution by running `cargo check` with
-//! RUSTC_WRAPPER set to itself. A recursive invocation is detected via
-//! `__CARGO_RUSTFLAGS_RECURSIVE`.
+#![doc = include_str!("../README.md")]
 
 use std::{
     env, fs,

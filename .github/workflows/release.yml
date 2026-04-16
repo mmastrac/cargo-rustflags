@@ -17,7 +17,7 @@ on:
         description: "After binaries are uploaded, run crates.io publish (trusted publishing / env approval)"
         required: false
         type: boolean
-        default: false
+        default: true
 
 jobs:
   tag:
@@ -27,11 +27,14 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-edit
+        uses: taiki-e/install-action@v2
         with:
           tool: cargo-edit
       - name: Resolve version
@@ -50,17 +53,23 @@ jobs:
             )"
           fi
           echo "version=$V" >> "$GITHUB_OUTPUT"
-      - run: |
+      - name: Ensure release tag does not exist
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.v.outputs.version }}"
+          if git ls-remote --tags origin "refs/tags/${TAG}" | grep -q .
+          then
+            echo "::error::Tag ${TAG} already exists on origin; use a new version or delete the remote tag."
+            exit 1
+          fi
+      - name: Bump version, commit, tag, and push
+        run: |
           set -euxo pipefail
           cargo set-version "${{ steps.v.outputs.version }}"
           git config user.name "Matt Mastracci"
           git config user.email "matthew@mastracci.com"
           git add -A
           git commit --allow-empty -m "release v${{ steps.v.outputs.version }}"
-          if git rev-parse -q --verify "refs/tags/v${{ steps.v.outputs.version }}" >/dev/null; then
-            echo "Tag v${{ steps.v.outputs.version }} already exists"
-            exit 1
-          fi
           git tag "v${{ steps.v.outputs.version }}"
           # Push only the tag (do not update default branch).
           git push origin "v${{ steps.v.outputs.version }}"
@@ -100,13 +109,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out release tag
+        uses: actions/checkout@v4
         with:
           ref: v${{ needs.tag.outputs.version }}
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain (${{ matrix.target }})
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: taiki-e/upload-rust-binary-action@v1
+      - name: Build and upload release binary
+        uses: taiki-e/upload-rust-binary-action@v1
         with:
           bin: cargo-rustflags
           target: ${{ matrix.target }}
@@ -127,13 +139,17 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out release tag
+        uses: actions/checkout@v4
         with:
           ref: v${{ needs.tag.outputs.version }}
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: rust-lang/crates-io-auth-action@v1
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Authenticate with crates.io (OIDC)
+        uses: rust-lang/crates-io-auth-action@v1
         id: auth
       # Placeholder: extend with `--dry-run`, `--no-verify`, or `-p` as needed for your workspace layout.
-      - run: cargo publish
+      - name: Publish to crates.io
+        run: cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
